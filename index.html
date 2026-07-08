@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- viewport-fit=cover lets us respect the iPhone notch / home-bar safe areas -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Bell Diagnostic Coach</title>
+
+  <!-- PWA + iPhone Home Screen support -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#0F1B27" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Diag Coach" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="icon" href="favicon-32.png" sizes="32x32" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ============================================================= -->
+<!-- HEADER: app name, live status chip, and utility buttons        -->
+<!-- ============================================================= -->
+<header class="app-header">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <div class="brand-text">
+      <strong>Bell Diagnostic Coach</strong>
+      <span>Residential no-cool</span>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button type="button" id="btnClear" class="btn-ghost" title="Clear all fields">Clear</button>
+  </div>
+</header>
+
+<!-- Progress bar + current section label + jump menu -->
+<div class="progress-wrap">
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  <div class="progress-row">
+    <span class="step-label" id="stepLabel">Step 1 of 10 · Job Information</span>
+    <label class="jump">
+      <span class="jump-caption">Jump to</span>
+      <select id="jumpSelect" aria-label="Jump to section"></select>
+    </label>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- MAIN: each <section class="step"> is one screen of the flow    -->
+<!-- ============================================================= -->
+<main id="steps">
+
+  <!-- 1. JOB INFORMATION ---------------------------------------- -->
+  <section class="step" data-title="Job Information">
+    <div class="card">
+      <h2 class="card-title">Job information</h2>
+      <p class="card-sub">Start with the basics. This fills the header of your ServiceTitan summary.</p>
+
+      <label class="field">Technician name
+        <input type="text" data-field="techName" autocomplete="name" placeholder="Your name" />
+      </label>
+      <label class="field">Customer name
+        <input type="text" data-field="customerName" placeholder="Customer on the ticket" />
+      </label>
+      <div class="field-row">
+        <label class="field">Job number
+          <input type="text" data-field="jobNumber" inputmode="numeric" placeholder="ST job #" />
+        </label>
+        <label class="field">Date
+          <input type="date" data-field="jobDate" />
+        </label>
+      </div>
+      <label class="field">Equipment type
+        <select data-field="equipType">
+          <option value="">Select…</option>
+          <option>Split AC</option>
+          <option>Heat Pump</option>
+          <option>Package Unit</option>
+          <option>Inverter / Communicating System</option>
+          <option>Other</option>
+        </select>
+      </label>
+      <label class="field">Refrigerant type
+        <select data-field="refrigerant">
+          <option value="">Select…</option>
+          <option>R-410A</option>
+          <option>R-22</option>
+          <option>R-454B</option>
+          <option>R-32</option>
+          <option>Other</option>
+        </select>
+      </label>
+      <label class="field">Customer complaint
+        <textarea data-field="complaint" rows="3" placeholder="In the customer's words — what are they experiencing?"></textarea>
+      </label>
+    </div>
+  </section>
+
+  <!-- 2. THERMOSTAT & CALL CONFIRMATION ------------------------- -->
+  <section class="step" data-title="Thermostat & Call">
+    <div class="card">
+      <h2 class="card-title">Thermostat &amp; call confirmation</h2>
+      <p class="card-sub">Confirm the system is actually being told to cool before chasing anything else.</p>
+
+      <div class="check" data-choice="tstatCalling" data-label="Thermostat calling for cooling?"></div>
+      <div class="check" data-choice="tstatMode" data-label="Thermostat mode set correctly?"></div>
+      <div class="check" data-choice="setpointBelow" data-label="Setpoint below indoor temperature?"></div>
+
+      <div class="field-row">
+        <label class="field">Indoor temp (°F)
+          <input type="number" data-field="indoorTemp" inputmode="decimal" placeholder="72" />
+        </label>
+        <label class="field">Outdoor temp (°F)
+          <input type="number" data-field="outdoorTemp" inputmode="decimal" placeholder="95" />
+        </label>
+      </div>
+      <label class="field">Thermostat error codes?
+        <input type="text" data-field="tstatErrors" placeholder="Code / message, or 'none'" />
+      </label>
+      <label class="field">Notes
+        <textarea data-field="tstatNotes" rows="2" placeholder="Anything worth recording"></textarea>
+      </label>
+    </div>
+  </section>
+
+  <!-- 3. INDOOR AIRFLOW ----------------------------------------- -->
+  <section class="step" data-title="Indoor Airflow">
+    <div class="card">
+      <h2 class="card-title">Indoor airflow checklist</h2>
+      <p class="card-sub">Airflow problems fake out refrigerant readings. Verify this before touching gauges.</p>
+
+      <label class="field">Filter condition
+        <select data-field="filterCondition">
+          <option value="">Select…</option>
+          <option>Clean</option>
+          <option>Dirty</option>
+          <option>Very dirty / restricted</option>
+          <option>Replaced on site</option>
+        </select>
+      </label>
+
+      <div class="check" data-choice="blowerRunning" data-label="Blower running?"></div>
+      <div class="check" data-choice="blowerSpeed" data-label="Blower speed / tap checked (if applicable)?"></div>
+
+      <label class="field">Evaporator coil condition
+        <select data-field="evapCoil">
+          <option value="">Select…</option>
+          <option>Clean</option>
+          <option>Dirty</option>
+          <option>Frozen / iced</option>
+          <option>Not accessible</option>
+        </select>
+      </label>
+
+      <div class="check" data-choice="returnRestrict" data-label="Return restrictions?"></div>
+      <div class="check" data-choice="supplyRestrict" data-label="Supply restrictions?"></div>
+
+      <label class="field">Static pressure (if available)
+        <input type="text" data-field="staticPressure" placeholder='e.g. 0.8" WC total' />
+      </label>
+      <div class="field-row">
+        <label class="field">Return air temp (°F)
+          <input type="number" data-field="returnTemp" inputmode="decimal" placeholder="75" />
+        </label>
+        <label class="field">Supply air temp (°F)
+          <input type="number" data-field="supplyTemp" inputmode="decimal" placeholder="57" />
+        </label>
+      </div>
+
+      <!-- Live calculated readout: temperature split -->
+      <div class="readout" id="splitReadout">
+        <div class="readout-row">
+          <span class="readout-label">Temperature split</span>
+          <span class="readout-chip" id="splitChip">—</span>
+        </div>
+        <div class="readout-value"><span id="splitValue">--</span><small>°F</small></div>
+        <p class="readout-note" id="splitNote">Enter return and supply temps to calculate.</p>
+      </div>
+
+      <label class="field">Notes
+        <textarea data-field="airflowNotes" rows="2" placeholder="Duct issues, dampers, registers, etc."></textarea>
+      </label>
+    </div>
+  </section>
+
+  <!-- 4. OUTDOOR UNIT ELECTRICAL -------------------------------- -->
+  <section class="step" data-title="Outdoor Electrical">
+    <div class="card">
+      <h2 class="card-title">Outdoor unit electrical checklist</h2>
+      <p class="card-sub">Work power in, then out. Confirm the unit is getting and using power correctly.</p>
+
+      <div class="check" data-choice="outdoorRunning" data-label="Outdoor unit running?"></div>
+      <div class="check" data-choice="disconnectOn" data-label="Disconnect on?"></div>
+      <div class="check" data-choice="breakerOn" data-label="Breaker on?"></div>
+      <div class="check" data-choice="contactorPulled" data-label="Contactor pulled in?"></div>
+      <div class="check" data-choice="lineVoltage" data-label="Line voltage present?"></div>
+      <div class="check" data-choice="lowVoltage" data-label="Low-voltage (24V) signal present?"></div>
+      <div class="check" data-choice="capTested" data-label="Capacitor tested?"></div>
+      <div class="check" data-choice="condFanRunning" data-label="Condenser fan motor running?"></div>
+      <div class="check" data-choice="compRunning" data-label="Compressor running?"></div>
+
+      <label class="field">Compressor amp draw (A)
+        <input type="number" data-field="compAmps" inputmode="decimal" placeholder="e.g. 14.5" />
+      </label>
+      <label class="field">Condenser coil condition
+        <select data-field="condCoil">
+          <option value="">Select…</option>
+          <option>Clean</option>
+          <option>Dirty</option>
+          <option>Very dirty / restricted</option>
+          <option>Damaged / bent fins</option>
+        </select>
+      </label>
+      <label class="field">Notes
+        <textarea data-field="electricalNotes" rows="2" placeholder="Readings under load, terminal condition, etc."></textarea>
+      </label>
+    </div>
+  </section>
+
+  <!-- 5. CAPACITOR TOLERANCE CALCULATOR ------------------------- -->
+  <section class="step" data-title="Capacitor Calculator">
+    <div class="card">
+      <h2 class="card-title">Capacitor tolerance calculator</h2>
+      <p class="card-sub">Compare measured microfarads against the rated value and tolerance.</p>
+
+      <label class="field">Tolerance (%)
+        <input type="number" data-field="capTolerance" inputmode="decimal" value="6" />
+      </label>
+
+      <fieldset class="subgroup">
+        <legend>Compressor side (HERM)</legend>
+        <div class="field-row">
+          <label class="field">Rated MFD
+            <input type="number" data-field="hermRated" inputmode="decimal" placeholder="45" />
+          </label>
+          <label class="field">Actual MFD
+            <input type="number" data-field="hermActual" inputmode="decimal" placeholder="43.1" />
+          </label>
+        </div>
+        <div class="readout" id="hermReadout">
+          <div class="readout-row">
+            <span class="readout-label">Compressor side</span>
+            <span class="readout-chip" id="hermChip">—</span>
+          </div>
+          <p class="readout-range" id="hermRange">Acceptable range appears here.</p>
+        </div>
+      </fieldset>
+
+      <fieldset class="subgroup">
+        <legend>Fan side (FAN)</legend>
+        <div class="field-row">
+          <label class="field">Rated MFD
+            <input type="number" data-field="fanRated" inputmode="decimal" placeholder="5" />
+          </label>
+          <label class="field">Actual MFD
+            <input type="number" data-field="fanActual" inputmode="decimal" placeholder="4.7" />
+          </label>
+        </div>
+        <div class="readout" id="fanReadout">
+          <div class="readout-row">
+            <span class="readout-label">Fan side</span>
+            <span class="readout-chip" id="fanChip">—</span>
+          </div>
+          <p class="readout-range" id="fanRange">Acceptable range appears here.</p>
+        </div>
+      </fieldset>
+    </div>
+  </section>
+
+  <!-- 6. REFRIGERANT READINGS ----------------------------------- -->
+  <section class="step" data-title="Refrigerant Readings">
+    <div class="card">
+      <h2 class="card-title">Refrigerant readings</h2>
+      <div class="banner banner-info">
+        Do not use these readings to charge the system until airflow, coil
+        condition, blower operation, and basic electrical operation are verified.
+      </div>
+
+      <fieldset class="subgroup">
+        <legend>Suction (low) side</legend>
+        <label class="field">Suction pressure (psig)
+          <input type="number" data-field="suctionPressure" inputmode="decimal" placeholder="118" />
+        </label>
+        <label class="field">Suction saturation temp (°F)
+          <input type="number" data-field="suctionSat" inputmode="decimal" placeholder="40" />
+        </label>
+        <label class="field">Suction line temp (°F)
+          <input type="number" data-field="suctionLine" inputmode="decimal" placeholder="52" />
+        </label>
+      </fieldset>
+
+      <fieldset class="subgroup">
+        <legend>Liquid (high) side</legend>
+        <label class="field">Liquid pressure (psig)
+          <input type="number" data-field="liquidPressure" inputmode="decimal" placeholder="340" />
+        </label>
+        <label class="field">Liquid saturation temp (°F)
+          <input type="number" data-field="liquidSat" inputmode="decimal" placeholder="105" />
+        </label>
+        <label class="field">Liquid line temp (°F)
+          <input type="number" data-field="liquidLine" inputmode="decimal" placeholder="95" />
+        </label>
+      </fieldset>
+
+      <!-- Live calculated readouts: superheat + subcooling -->
+      <div class="readout-grid">
+        <div class="readout">
+          <div class="readout-row"><span class="readout-label">Superheat</span></div>
+          <div class="readout-value"><span id="superheatValue">--</span><small>°F</small></div>
+          <p class="readout-note">Suction line − suction sat.</p>
+        </div>
+        <div class="readout">
+          <div class="readout-row"><span class="readout-label">Subcooling</span></div>
+          <div class="readout-value"><span id="subcoolValue">--</span><small>°F</small></div>
+          <p class="readout-note">Liquid sat − liquid line.</p>
+        </div>
+      </div>
+
+      <label class="field">Notes
+        <textarea data-field="refrigNotes" rows="2" placeholder="Metering device, TXV bulb, restrictions, etc."></textarea>
+      </label>
+    </div>
+  </section>
+
+  <!-- 7. DIAGNOSTIC DECISION SUPPORT ---------------------------- -->
+  <section class="step" data-title="Diagnostic Guidance">
+    <div class="card">
+      <h2 class="card-title">Diagnostic guidance</h2>
+      <p class="card-sub">Reminders based on what you've entered. These are prompts to verify — not a diagnosis.</p>
+      <div id="guidanceList" class="guidance-list"><!-- filled in by app.js --></div>
+    </div>
+  </section>
+
+  <!-- 8. REQUIRED PHOTO CHECKLIST ------------------------------- -->
+  <section class="step" data-title="Photo Checklist">
+    <div class="card">
+      <h2 class="card-title">Required photos</h2>
+      <p class="card-sub">Check each photo as you take it. Photos protect the diagnosis and the estimate.</p>
+      <div id="photoList" class="photo-list"><!-- filled in by app.js --></div>
+    </div>
+  </section>
+
+  <!-- 9. ESTIMATE & MANAGER CONFIRMATION ------------------------ -->
+  <section class="step" data-title="Estimates & Manager">
+    <div class="card">
+      <h2 class="card-title">Estimates &amp; manager confirmation</h2>
+      <p class="card-sub">The expectation: don't leave without sent estimates unless you've called your manager.</p>
+
+      <div class="check" data-choice="estimatesBuilt" data-label="Were estimates built?"></div>
+      <div class="check" data-choice="estimatesSent" data-label="Were all estimates sent to the customer?"></div>
+      <div class="check" data-choice="leavingNoEstimate" data-label="Leaving without sending estimates?"></div>
+      <div class="check" data-choice="calledManager" data-label="Called the manager before leaving without estimates?"></div>
+
+      <!-- Red warning appears here when the rule is triggered -->
+      <div class="banner banner-danger is-hidden" id="managerWarning">
+        Manager call required before leaving this job without sent estimates.
+      </div>
+    </div>
+  </section>
+
+  <!-- 10. FINAL SERVICETITAN SUMMARY ---------------------------- -->
+  <section class="step" data-title="ServiceTitan Summary">
+    <div class="card">
+      <h2 class="card-title">Findings &amp; status</h2>
+      <p class="card-sub">A few last details, then generate a clean summary to paste into ServiceTitan.</p>
+
+      <label class="field">Failed component or suspected issue
+        <input type="text" data-field="suspectedIssue" placeholder="e.g. weak run capacitor (HERM), suspected low charge" />
+      </label>
+      <label class="field">Repair performed or recommended
+        <textarea data-field="repairAction" rows="2" placeholder="What you did, or what you're recommending"></textarea>
+      </label>
+      <label class="field">Current system status
+        <select data-field="systemStatus">
+          <option value="">Select…</option>
+          <option>Operational after repair — final operation confirmed</option>
+          <option>Operational, monitoring recommended</option>
+          <option>Not operational — repair recommended, not completed</option>
+          <option>Further diagnosis / testing recommended</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="card">
+      <div class="summary-head">
+        <h2 class="card-title">ServiceTitan summary</h2>
+        <button type="button" id="btnRegenerate" class="btn-ghost btn-small">Refresh</button>
+      </div>
+      <textarea id="summaryOutput" class="summary-output" rows="16" readonly></textarea>
+      <button type="button" id="btnCopy" class="btn-primary btn-block">Copy ServiceTitan summary</button>
+      <p class="copy-status" id="copyStatus" aria-live="polite"></p>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============================================================= -->
+<!-- FOOTER NAV: Prev / Next, sticky above the home bar             -->
+<!-- ============================================================= -->
+<nav class="app-nav">
+  <button type="button" id="btnPrev" class="btn-secondary">Back</button>
+  <button type="button" id="btnNext" class="btn-primary">Next</button>
+</nav>
+
+<script src="app.js"></script>
+</body>
+</html>
