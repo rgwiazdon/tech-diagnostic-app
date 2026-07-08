@@ -246,6 +246,96 @@ function calcRefrigerant() {
   return { superheat, subcool };
 }
 
+// 5d. PT chart lookup — derive saturation temp from pressure + refrigerant.
+// Linear interpolation between table points. column is "dew" or "bubble".
+// Returns a number, or null if there's no data / the pressure is off the chart.
+function ptLookupTemp(refrig, pressure, column) {
+  const table = (typeof PT_DATA !== "undefined") ? PT_DATA[refrig] : null;
+  if (!table || isNaN(pressure)) return null;
+  const pts = table.points;                 // sorted by psig ascending
+  const lo = pts[0][0], hi = pts[pts.length - 1][0];
+  if (pressure < lo || pressure > hi) return null; // don't extrapolate past the chart
+  const col = column === "dew" ? 2 : 1;     // [psig, bubble(1), dew(2)]
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p1 = pts[i][0], p2 = pts[i + 1][0];
+    if (pressure >= p1 && pressure <= p2) {
+      const t1 = pts[i][col], t2 = pts[i + 1][col];
+      const frac = p2 === p1 ? 0 : (pressure - p1) / (p2 - p1);
+      return t1 + frac * (t2 - t1);
+    }
+  }
+  return null;
+}
+
+// Write a small hint line under a saturation field.
+function setHint(id, txt) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = txt || "";
+}
+
+// Auto-fill a saturation field from the PT chart.
+// which = "suction" (uses dew) or "liquid" (uses bubble).
+// Respects manual entries: only fills when the field is empty or was
+// itself auto-filled (tracked with data-auto). Clears its own auto value
+// if the pressure is removed or goes off-chart.
+function ptAutoFill(which) {
+  const refrig = valOf("refrigerant");
+  const isSuction = which === "suction";
+  const satEl = field(isSuction ? "suctionSat" : "liquidSat");
+  const pressure = numOf(isSuction ? "suctionPressure" : "liquidPressure");
+  if (!satEl) return;
+
+  const temp = ptLookupTemp(refrig, pressure, isSuction ? "dew" : "bubble");
+  const wasAuto = satEl.dataset.auto === "1";
+
+  if (temp === null) {
+    // No valid lookup: clear only if we had auto-filled it.
+    if (wasAuto) { satEl.value = ""; satEl.dataset.auto = ""; satEl.classList.remove("is-auto"); }
+    return;
+  }
+  // Fill only when safe (empty or previously auto), so we never stomp a manual value.
+  if (satEl.value === "" || wasAuto) {
+    satEl.value = round1(temp);
+    satEl.dataset.auto = "1";
+    satEl.classList.add("is-auto");
+  }
+}
+
+// Update the PT readout tile + the two field hints (display only — never
+// writes into the saturation fields, so it's safe to call on every change).
+function ptRefreshDisplay() {
+  const refrig = valOf("refrigerant");
+  const table = (typeof PT_DATA !== "undefined") ? PT_DATA[refrig] : null;
+  const chip = $("#ptChip");
+  const text = $("#ptText");
+
+  if (!table) {
+    chip.textContent = "—";
+    chip.className = "readout-chip";
+    text.textContent = refrig === "Other"
+      ? 'PT lookup isn\'t available for "Other". Enter saturation temps manually.'
+      : "Select a refrigerant in Job Information, then enter a pressure below to auto-fill its saturation temp.";
+    setHint("suctionSatHint", "");
+    setHint("liquidSatHint", "");
+    return;
+  }
+
+  chip.textContent = table.glide ? `Glide ~${table.glideF}°F` : "No glide";
+  chip.className = "readout-chip " + (table.glide ? "is-warn" : "is-pass");
+  text.textContent = `${refrig} — ${table.note}`;
+
+  // Live derived values shown as hints (whether or not the field auto-filled).
+  const sp = numOf("suctionPressure");
+  const lp = numOf("liquidPressure");
+  const sDew = ptLookupTemp(refrig, sp, "dew");
+  const lBub = ptLookupTemp(refrig, lp, "bubble");
+
+  setHint("suctionSatHint", isNaN(sp) ? "" :
+    (sDew !== null ? `PT: ${round1(sDew)}°F (${refrig} dew)` : "Suction pressure is off the chart range"));
+  setHint("liquidSatHint", isNaN(lp) ? "" :
+    (lBub !== null ? `PT: ${round1(lBub)}°F (${refrig} bubble)` : "Liquid pressure is off the chart range"));
+}
+
 /* ---- 6. Estimate / manager warning ----------------------------- */
 function checkManagerWarning() {
   const leaving = valOf("leavingNoEstimate");
@@ -411,6 +501,12 @@ function buildSummary() {
     g("refrigNotes") ? `Notes: ${g("refrigNotes")}` : "",
   ].filter(Boolean);
   if (refrigLines.length) {
+    // Flag when saturation temps were derived from the PT chart.
+    const satAuto = (field("suctionSat") && field("suctionSat").dataset.auto === "1") ||
+                    (field("liquidSat") && field("liquidSat").dataset.auto === "1");
+    if (satAuto && valOf("refrigerant")) {
+      refrigLines.push(`Saturation temps derived from ${valOf("refrigerant")} PT chart (dew for suction, bubble for liquid) — reference values.`);
+    }
     refrigLines.push("Note: readings not used to charge until airflow, coil, blower, and basic electrical verified.");
   }
   section("REFRIGERANT READINGS", refrigLines);
@@ -479,11 +575,28 @@ function onChange() {
   calcSplit();
   calcCapacitors();
   calcRefrigerant();
+  ptRefreshDisplay();
   checkManagerWarning();
   renderGuidance();
   buildSummary();
   saveState();
 }
+
+/* ---- 10a. PT auto-fill wiring ---------------------------------- */
+// When a pressure or the refrigerant changes, fill the matching saturation
+// field from the PT chart. These fire before the document-level onChange,
+// so superheat/subcooling recompute with the freshly filled value.
+if (field("suctionPressure"))
+  field("suctionPressure").addEventListener("input", () => ptAutoFill("suction"));
+if (field("liquidPressure"))
+  field("liquidPressure").addEventListener("input", () => ptAutoFill("liquid"));
+if (field("refrigerant"))
+  field("refrigerant").addEventListener("change", () => { ptAutoFill("suction"); ptAutoFill("liquid"); });
+// If a tech types a saturation temp by hand, stop treating it as auto-filled.
+["suctionSat", "liquidSat"].forEach((k) => {
+  const el = field(k);
+  if (el) el.addEventListener("input", () => { el.dataset.auto = ""; el.classList.remove("is-auto"); });
+});
 // Listen for typing and selecting across the whole app.
 document.addEventListener("input", onChange);
 document.addEventListener("change", onChange);

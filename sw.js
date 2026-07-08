@@ -7,7 +7,7 @@
   phones pull the fresh copy on their next visit.
 */
 
-const CACHE_VERSION = "bdc-v1";
+const CACHE_VERSION = "bdc-v2";
 
 // All the files that make up the app. Paths are relative so the app
 // works no matter what folder it is served from.
@@ -15,6 +15,7 @@ const APP_FILES = [
   "./",
   "./index.html",
   "./styles.css",
+  "./pt-data.js",
   "./app.js",
   "./manifest.webmanifest",
   "./icon-192.png",

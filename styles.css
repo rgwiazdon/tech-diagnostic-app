@@ -153,6 +153,12 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 3px rgba(44, 82, 113, 0.18);
 }
 
+/* Small helper text under a field (used for PT-derived saturation temps) */
+.hint { font-size: 12px; font-weight: 500; color: var(--cyan); min-height: 14px; }
+.hint:empty { min-height: 0; }
+/* Tint a field that was auto-filled from the PT chart */
+input.is-auto { background: #f2fbfd; border-color: #bfe6ec; }
+
 /* Grouped calculator blocks */
 .subgroup { border: 1px solid var(--line); border-radius: 12px;
   padding: 14px 12px 4px; margin: 0 0 14px; }

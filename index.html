@@ -278,6 +278,16 @@
         condition, blower operation, and basic electrical operation are verified.
       </div>
 
+      <!-- PT chart lookup: derives saturation temps from pressure + refrigerant -->
+      <div class="readout" id="ptReadout">
+        <div class="readout-row">
+          <span class="readout-label">PT chart lookup</span>
+          <span class="readout-chip" id="ptChip">—</span>
+        </div>
+        <p class="readout-range" id="ptText">Select a refrigerant in Job Information, then enter a pressure below to auto-fill its saturation temp.</p>
+        <p class="readout-note">Reference values — verify against the data plate or manufacturer chart before charging.</p>
+      </div>
+
       <fieldset class="subgroup">
         <legend>Suction (low) side</legend>
         <label class="field">Suction pressure (psig)
@@ -285,6 +295,7 @@
         </label>
         <label class="field">Suction saturation temp (°F)
           <input type="number" data-field="suctionSat" inputmode="decimal" placeholder="40" />
+          <small class="hint" id="suctionSatHint"></small>
         </label>
         <label class="field">Suction line temp (°F)
           <input type="number" data-field="suctionLine" inputmode="decimal" placeholder="52" />
@@ -298,6 +309,7 @@
         </label>
         <label class="field">Liquid saturation temp (°F)
           <input type="number" data-field="liquidSat" inputmode="decimal" placeholder="105" />
+          <small class="hint" id="liquidSatHint"></small>
         </label>
         <label class="field">Liquid line temp (°F)
           <input type="number" data-field="liquidLine" inputmode="decimal" placeholder="95" />
@@ -404,6 +416,7 @@
   <button type="button" id="btnNext" class="btn-primary">Next</button>
 </nav>
 
+<script src="pt-data.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
