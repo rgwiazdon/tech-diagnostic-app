@@ -235,8 +235,40 @@ input.is-auto { background: #f2fbfd; border-color: #bfe6ec; }
   display: grid; place-items: center; }
 .is-hidden { display: none !important; }
 
-/* ---- 10. Guidance list ----------------------------------------- */
-.guidance-list { display: flex; flex-direction: column; gap: 12px; }
+/* ---- 9b. Reading status panel + conclusion --------------------- */
+.status-panel { display: flex; flex-direction: column; gap: 8px; }
+.status-row {
+  display: grid; grid-template-columns: 1fr auto; align-items: center;
+  gap: 8px 12px; border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px;
+}
+.status-name { font-size: 14px; font-weight: 600; color: var(--steel); }
+.status-meta { grid-column: 1 / -1; font-size: 12px; color: var(--muted);
+  font-family: var(--font-mono); }
+.status-chip {
+  font-size: 12px; font-weight: 700; letter-spacing: 0.4px;
+  padding: 4px 12px; border-radius: 99px; text-align: center;
+  background: #e9edf1; color: var(--muted); justify-self: end;
+}
+.status-chip.is-pass { background: rgba(31,157,87,0.14); color: #157040; }
+.status-chip.is-warn { background: rgba(201,135,27,0.16); color: #9a6710; }
+.status-chip.is-fail { background: rgba(214,64,39,0.14); color: #b7351f; }
+
+.conclusion {
+  border: 1px solid var(--line); border-left: 4px solid var(--steel-2);
+  border-radius: 10px; padding: 14px; background: #fbfcfd;
+}
+.conclusion.tone-alert { border-left-color: var(--fail); background: #fdefec; }
+.conclusion-suspect { font-size: 17px; font-weight: 700; color: var(--steel); margin: 0 0 4px; }
+.conclusion-score { font-size: 12px; font-weight: 600; color: var(--muted);
+  font-family: var(--font-mono); margin: 0 0 10px; }
+.conclusion-text { font-size: 14px; color: #35485a; margin: 0 0 8px; }
+.conclusion-alt { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+.conclusion-caveat { font-size: 12px; color: var(--muted); margin: 10px 0 0;
+  padding-top: 10px; border-top: 1px dashed var(--line); }
+.conclusion-airflow { color: var(--fail); font-weight: 600; }
+
+/* ---- 10. Guidance list ----------------------------------------- */.guidance-list { display: flex; flex-direction: column; gap: 12px; }
 .guidance-item {
   border: 1px solid var(--line); border-left: 4px solid var(--steel-2);
   border-radius: 10px; padding: 12px 14px; background: #fbfcfd;

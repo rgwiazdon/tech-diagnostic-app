@@ -39,7 +39,7 @@
 <div class="progress-wrap">
   <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
   <div class="progress-row">
-    <span class="step-label" id="stepLabel">Step 1 of 10 · Job Information</span>
+    <span class="step-label" id="stepLabel">Job Information</span>
     <label class="jump">
       <span class="jump-caption">Jump to</span>
       <select id="jumpSelect" aria-label="Jump to section"></select>
@@ -72,6 +72,9 @@
           <input type="date" data-field="jobDate" />
         </label>
       </div>
+      <label class="field">Year of manufacture
+        <input type="number" data-field="yearMfg" inputmode="numeric" placeholder="e.g. 2013" />
+      </label>
       <label class="field">Equipment type
         <select data-field="equipType">
           <option value="">Select…</option>
@@ -80,6 +83,15 @@
           <option>Package Unit</option>
           <option>Inverter / Communicating System</option>
           <option>Other</option>
+        </select>
+      </label>
+      <label class="field">Metering device
+        <select data-field="meteringDevice">
+          <option value="">Select…</option>
+          <option>TXV</option>
+          <option>Fixed orifice / piston</option>
+          <option>EEV</option>
+          <option>Unknown / Other</option>
         </select>
       </label>
       <label class="field">Refrigerant type
@@ -353,8 +365,20 @@
   <!-- 7. DIAGNOSTIC DECISION SUPPORT ---------------------------- -->
   <section class="step" data-title="Diagnostic Guidance">
     <div class="card">
-      <h2 class="card-title">Diagnostic guidance</h2>
-      <p class="card-sub">Reminders based on what you've entered. These are prompts to verify — not a diagnosis.</p>
+      <h2 class="card-title">Reading status</h2>
+      <p class="card-sub">How each reading compares to what's expected for the outdoor temp and system. Estimates — verify against the data plate.</p>
+      <div id="statusPanel" class="status-panel"><!-- filled in by app.js --></div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Suspected condition</h2>
+      <p class="card-sub">Best match from the charge/airflow chart based on the readings. A direction to confirm — not a final diagnosis.</p>
+      <div id="conclusionPanel"><!-- filled in by app.js --></div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Reminders</h2>
+      <p class="card-sub">Prompts to verify before condemning a part.</p>
       <div id="guidanceList" class="guidance-list"><!-- filled in by app.js --></div>
     </div>
   </section>
@@ -368,25 +392,7 @@
     </div>
   </section>
 
-  <!-- 9. ESTIMATE & MANAGER CONFIRMATION ------------------------ -->
-  <section class="step" data-title="Estimates & Manager">
-    <div class="card">
-      <h2 class="card-title">Estimates &amp; manager confirmation</h2>
-      <p class="card-sub">The expectation: don't leave without sent estimates unless you've called your manager.</p>
-
-      <div class="check" data-choice="estimatesBuilt" data-label="Were estimates built?"></div>
-      <div class="check" data-choice="estimatesSent" data-label="Were all estimates sent to the customer?"></div>
-      <div class="check" data-choice="leavingNoEstimate" data-label="Leaving without sending estimates?"></div>
-      <div class="check" data-choice="calledManager" data-label="Called the manager before leaving without estimates?"></div>
-
-      <!-- Red warning appears here when the rule is triggered -->
-      <div class="banner banner-danger is-hidden" id="managerWarning">
-        Manager call required before leaving this job without sent estimates.
-      </div>
-    </div>
-  </section>
-
-  <!-- 10. FINAL SERVICETITAN SUMMARY ---------------------------- -->
+  <!-- 9. FINAL SERVICETITAN SUMMARY ----------------------------- -->
   <section class="step" data-title="ServiceTitan Summary">
     <div class="card">
       <h2 class="card-title">Findings &amp; status</h2>

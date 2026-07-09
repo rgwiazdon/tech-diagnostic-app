@@ -7,7 +7,7 @@
   phones pull the fresh copy on their next visit.
 */
 
-const CACHE_VERSION = "bdc-v4";
+const CACHE_VERSION = "bdc-v5";
 
 // All the files that make up the app. Paths are relative so the app
 // works no matter what folder it is served from.
