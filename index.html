@@ -27,7 +27,7 @@
     <img class="brand-logo" src="icon-192.png" alt="Bell Bros." />
     <div class="brand-text">
       <strong>Bell Diagnostic Coach</strong>
-      <span>Residential no-cool · v7</span>
+      <span>Residential no-cool · v10</span>
     </div>
   </div>
   <div class="header-actions">
@@ -74,6 +74,15 @@
       </div>
       <label class="field">Year of manufacture
         <input type="number" data-field="yearMfg" inputmode="numeric" placeholder="e.g. 2013" />
+      </label>
+      <label class="field">Efficiency (sets head-pressure target)
+        <select data-field="seerClass">
+          <option value="">Auto from year</option>
+          <option>6–10 SEER</option>
+          <option>10–12 SEER</option>
+          <option>13–15 SEER</option>
+          <option>16+ SEER</option>
+        </select>
       </label>
       <label class="field">Equipment type
         <select data-field="equipType">
@@ -171,6 +180,7 @@
 
       <label class="field">Static pressure (if available)
         <input type="text" data-field="staticPressure" placeholder='e.g. 0.8" WC total' />
+        <small class="hint">Keep total external static between 0.3" and 0.7" WC on most systems.</small>
       </label>
       <div class="field-row">
         <label class="field">Return air temp (°F)

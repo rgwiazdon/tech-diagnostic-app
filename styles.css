@@ -266,6 +266,26 @@ input.is-auto { background: #f2fbfd; border-color: #bfe6ec; }
 .conclusion-alt { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
 .conclusion-caveat { font-size: 12px; color: var(--muted); margin: 10px 0 0;
   padding-top: 10px; border-top: 1px dashed var(--line); }
+.conclusion-key { font-size: 13px; color: var(--steel); background: #eef4f8;
+  border-radius: 8px; padding: 9px 12px; margin: 10px 0 0; }
+.conclusion-missing {
+  font-size: 13px; color: #97650f; background: #fdf7ec;
+  border: 1px solid #f0dcb4; border-radius: 8px;
+  padding: 10px 12px; margin: 10px 0 0;
+}
+.status-missing { color: var(--warn) !important; font-weight: 600; }
+
+/* Expandable "possible causes" list under an abnormal reading */
+.causes { grid-column: 1 / -1; margin-top: 8px; }
+.causes summary {
+  font-size: 13px; font-weight: 600; color: var(--steel-2);
+  cursor: pointer; padding: 6px 0; list-style: none;
+}
+.causes summary::-webkit-details-marker { display: none; }
+.causes summary::before { content: "▸ "; }
+.causes[open] summary::before { content: "▾ "; }
+.causes ul { margin: 4px 0 4px; padding-left: 20px; }
+.causes li { font-size: 13px; color: #35485a; margin-bottom: 5px; line-height: 1.4; }
 .conclusion-airflow { color: var(--fail); font-weight: 600; }
 
 /* ---- 10. Guidance list ----------------------------------------- */.guidance-list { display: flex; flex-direction: column; gap: 12px; }

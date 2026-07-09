@@ -11,7 +11,7 @@
   (Bumping it is still good hygiene when you change files.)
 */
 
-const CACHE_VERSION = "bdc-v7";
+const CACHE_VERSION = "bdc-v10";
 
 const APP_FILES = [
   "./",
