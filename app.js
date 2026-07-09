@@ -427,15 +427,36 @@ function computeStatuses() {
       expText: (pLo && pHi) ? `expect ~${psig(pLo)}–${psig(pHi)} psig (DTD ~35°F)` : `expect evap ${Math.round(lo)}–${Math.round(hi)}°F` };
   }
 
-  // Superheat. TXV/EEV holds 10°F +/-5 (5–15). Fixed orifice depends on indoor
-  // wet bulb + outdoor dry bulb — a superheat chart is required for a real target.
+  // Superheat. TXV/EEV holds 10°F +/-5 (5–15). Fixed orifice has NO single
+  // target — it's read off the charging chart using return-air wet bulb and
+  // outdoor dry bulb. If we have both, use the real target; otherwise say so.
   const txvLike = metering === "TXV" || metering === "EEV";
-  let sh = U;
+  const isFixed = metering === "Fixed orifice / piston";
+  let sh = U, pistonTarget = null;
+
+  if (isFixed) {
+    pistonTarget = pistonTargetSuperheat(numOf("returnWB"), ambient);
+  }
+
   if (!isNaN(superheat)) {
-    const loT = txvLike ? 5 : 8, hiT = txvLike ? 15 : 18;
-    sh = { status: superheat > hiT ? "high" : superheat < loT ? "low" : "normal",
-      valueText: `${round1(superheat)}°F`,
-      expText: txvLike ? "TXV target ~10°F ±5" : "piston: use a superheat chart (WB + ODB)" };
+    if (isFixed) {
+      if (pistonTarget && pistonTarget.target != null) {
+        const t = pistonTarget.target;
+        // Within +/-5°F of the chart target is acceptable in the field.
+        const status = superheat > t + 5 ? "high" : superheat < t - 5 ? "low" : "normal";
+        sh = { status, valueText: `${round1(superheat)}°F`,
+          expText: `chart target ${t}°F (WB ${round1(numOf("returnWB"))} / ODB ${round1(ambient)})` };
+      } else {
+        // No usable target: report the value but don't pretend to judge it.
+        sh = { status: "unknown", valueText: `${round1(superheat)}°F`,
+          expText: "need return-air wet bulb + outdoor temp for a piston target" };
+      }
+    } else {
+      const loT = txvLike ? 5 : 8, hiT = txvLike ? 15 : 18;
+      sh = { status: superheat > hiT ? "high" : superheat < loT ? "low" : "normal",
+        valueText: `${round1(superheat)}°F`,
+        expText: txvLike ? "TXV target ~10°F ±5" : "target 8–18°F" };
+    }
   }
 
   // Subcooling. TXV: 8–14°F (10 ±3). Fixed orifice: swings 5–23°F with load,
@@ -458,65 +479,83 @@ function computeStatuses() {
   // Freeze risk: below 32°F saturation the evaporator will eventually ice up.
   const freezeRisk = !isNaN(evapSat) && evapSat < 32;
 
-  return { head, suction, sh, sc, dt, metering, refrig, txvLike, freezeRisk, evapSat, ctoa: ct };
+  // Negative CTOA: an air-cooled condenser cannot condense at or below ambient.
+  // Seen on a real job: 89°F condensing at 91°F ambient = no liquid at all.
+  const negCTOA = !isNaN(condTemp) && !isNaN(ambient) && condTemp <= ambient;
+
+  // High-pressure alarm: near the compressor's high-pressure cutout.
+  // Confirmed on a real job: 610 psig / 149.5°F condensing, tripping the high limit.
+  const HP_LIMIT = { "R-410A": 600, "R-454B": 600, "R-32": 600, "R-22": 400 };
+  const lp = numOf("liquidPressure");
+  const limit = HP_LIMIT[refrig];
+  const hpAlarm = (limit && !isNaN(lp) && lp >= limit) || (!isNaN(condTemp) && condTemp >= 145);
+
+  const scValue = !isNaN(subcool) ? subcool : null;
+
+  return { head, suction, sh, sc, dt, metering, refrig, txvLike, isFixed, pistonTarget,
+           freezeRisk, negCTOA, hpAlarm, hpLimit: limit, liquidPressure: lp,
+           condTemp, ambient, scValue, evapSat, ctoa: ct };
 }
 
-// The chart, encoded. Each column is "high" | "low" | "normal" | "any".
-// Columns: sp = suction, hp = head, sh = superheat, sc = subcool, dt = split.
-const CONDITIONS = {
-  fixed: [
-    { name: "Low charge", sp: "low", hp: "low", sh: "high", sc: "low", dt: "low",
-      text: "Points to undercharge or a leak. Confirm there's no leak, then weigh in refrigerant to target superheat using a piston superheat chart (indoor wet bulb + outdoor dry bulb).",
-      key: "Low subcool + low head. A restriction holds subcool normal or high." },
-    { name: "Overcharge", sp: "high", hp: "high", sh: "low", sc: "high", dt: "normal",
-      text: "Points to overcharge. Verify the condenser is clean and the fan is moving air first, then recover to target.",
-      key: "High subcool + high head with low superheat." },
-    { name: "Low indoor airflow / low return temp", sp: "low", hp: "normal", sh: "low", sc: "normal", dt: "high",
-      text: "Reads like an airflow problem, not a charge problem. Check filter, evaporator coil, blower speed, and ducts before touching the charge.",
-      key: "Low superheat with a HIGH temperature split." },
-    { name: "Dirty condenser / high head", sp: "high", hp: "high", sh: "normal", sc: "normal", dt: "low",
-      text: "High head with normal superheat and subcool points to heat-rejection trouble. Wash the condenser coil, confirm the fan and airflow, then recheck.",
-      key: "High head while superheat and subcool stay normal." },
-    { name: "Liquid line restriction", sp: "low", hp: "normal", sh: "high", sc: "high", dt: "low",
-      text: "Suspect a restriction (filter-drier or liquid line). Liquid backs up in the condenser, so subcooling holds normal or high. Feel for a temperature drop across the drier — low suction with high superheat and backed-up subcool is the tell.",
-      key: "Subcool normal/high with normal head — that's what separates it from low charge." },
-    { name: "Wrong / loose piston", sp: "high", hp: "normal", sh: "low", sc: "low", dt: "low",
-      text: "Suspect the wrong or a loose piston (or bypass). Confirm the correct orifice size for this equipment.",
-      key: "High suction with low superheat and low subcool." },
-    { name: "High return-air temp / high load", sp: "high", hp: "high", sh: "high", sc: "low", dt: "low",
-      text: "Looks like high indoor load or a hot pull-down. Let the system run and stabilize, verify indoor conditions, then re-measure.",
-      key: "Everything reads high because the box is hot." }
-  ],
-  txv: [
-    { name: "Low charge / undercharge", sp: "low", hp: "low", sh: "high", sc: "low", dt: "low",
-      text: "Low subcool with low head points to undercharge. At a hard undercharge the TXV can't hold superheat, so superheat climbs too. Leak search first, then weigh in and set to the data-plate subcool.",
-      key: "Low subcool + low head. A restriction holds subcool normal or high." },
-    { name: "Low charge (slight)", sp: "normal", hp: "low", sh: "normal", sc: "low", dt: "normal",
-      text: "A TXV holds superheat, so a small undercharge shows up in subcooling. Low subcool with normal superheat points to undercharge/leak — confirm the subcool target on the data plate.",
-      key: "Subcool low while superheat stays normal." },
-    { name: "Liquid line restriction", sp: "low", hp: "normal", sh: "high", sc: "high", dt: "low",
-      text: "Suspect a restriction (drier or liquid line). Liquid backs up in the condenser, so subcooling holds normal or high while suction and superheat starve. Feel for a temperature drop across the drier.",
-      key: "Subcool normal/high with normal head — that's what separates it from low charge." },
-    { name: "Overfeeding TXV / loose or insulated bulb", sp: "high", hp: "normal", sh: "low", sc: "low", dt: "low",
-      text: "High suction with low superheat means the valve is overfeeding. Check the sensing bulb: mounting, contact, and insulation.",
-      key: "High suction with low superheat." },
-    { name: "Overcharge (slight)", sp: "normal", hp: "high", sh: "normal", sc: "high", dt: "normal",
-      text: "High subcool and head point to overcharge (or a dirty condenser / airflow). Verify the condenser first, then recover to the data-plate subcool.",
-      key: "High subcool + high head." },
-    { name: "Low indoor airflow / low return temp", sp: "low", hp: "normal", sh: "low", sc: "normal", dt: "high",
-      text: "Reads like an airflow problem, not a charge problem. Check filter, coil, blower, and ducts first.",
-      key: "Low superheat with a HIGH temperature split." }
-  ]
-};
 
-// Match observed statuses to the chart rows for the chosen metering type.
-// Subcooling and head pressure carry extra weight: they're what actually
-// separate a low charge from a restriction. Temperature split is the weakest
-// signal (airflow and load both move it), so it counts least.
+// Weighting reflects how much each pillar actually tells you:
+//  - TXV: the valve holds superheat, so SUBCOOL is the charge indicator.
+//  - Fixed orifice: subcool swings 5–23°F with load, so SUPERHEAT rules.
 const WEIGHTS = {
   txv:   { sc: 2,    hp: 2, sh: 1.5, sp: 1,   dt: 0.5 },
   fixed: { sc: 0.75, hp: 2, sh: 2,   sp: 1.5, dt: 0.5 }
 };
+
+// Compressor amp draw compared to nameplate RLA.
+// Rough field bands: well under RLA suggests a starved system moving less
+// refrigerant; at or over RLA suggests high head / high compression ratio.
+function ampStatusOf() {
+  const a = numOf("compAmps"), rla = numOf("compRLA");
+  if (isNaN(a) || isNaN(rla) || rla <= 0) return "unknown";
+  const pct = (a / rla) * 100;
+  if (pct < 75) return "low";
+  if (pct > 100) return "high";
+  return "normal";
+}
+
+// Gather the extra field observations the knowledge base reasons over.
+function collectEvidence(st) {
+  const filter = valOf("filterCondition"), evap = valOf("evapCoil");
+  const dirtyFilter = filter === "Dirty" || filter === "Very dirty / restricted";
+  const dirtyEvap = evap === "Dirty" || evap === "Frozen / iced";
+  const blowerOff = valOf("blowerRunning") === "No";
+  const cond = valOf("condCoil");
+  return {
+    drierDrop: valOf("drierDrop") || "Not checked",
+    frostLoc: valOf("frostLoc") || "Not checked",
+    shSwinging: valOf("shSwinging") || "Not checked",
+    bulbIssue: valOf("bulbIssue") || "Not checked",
+    recentService: valOf("recentService") || "Not checked",
+    chargeVerified: valOf("chargeVerified") || "Not checked",
+    ampStatus: ampStatusOf(),
+    scValue: st.scValue,
+    dirtyFilter, dirtyEvap, blowerOff,
+    airflowOK: !dirtyFilter && !dirtyEvap && valOf("blowerRunning") === "Yes",
+    // Airflow must be VERIFIED (not merely "not obviously bad") before charge
+    // readings can be trusted. Unknown counts as not verified.
+    airflowVerified: valOf("blowerRunning") === "Yes" &&
+      ["Clean", "Replaced on site"].includes(valOf("filterCondition")) &&
+      ["Clean", "Not accessible"].includes(valOf("evapCoil")),
+    restrictionRuledOut: valOf("drierDrop") === "No",
+    condDirty: cond === "Dirty" || cond === "Very dirty / restricted",
+    condFanOff: valOf("condFanRunning") === "No",
+    condClean: cond === "Clean" && valOf("condFanRunning") === "Yes",
+    sp: st.suction.status, hp: st.head.status, sh: st.sh.status,
+    sc: st.sc.status, dt: st.dt.status
+  };
+}
+
+// Does an observed status satisfy a pattern cell? Cells may be a string,
+// an array of acceptable values, or "any".
+function cellMatches(rule, obs) {
+  if (rule === "any") return true;
+  return Array.isArray(rule) ? rule.includes(obs) : rule === obs;
+}
 
 function matchConditions(st) {
   const set = st.metering === "Fixed orifice / piston" ? "fixed"
@@ -527,18 +566,58 @@ function matchConditions(st) {
   if (knownCount < 3) return { need: "data", knownCount };
 
   const wt = WEIGHTS[set];
-  const ranked = CONDITIONS[set].map((c) => {
-    let score = 0, matched = 0, considered = 0;
-    ["sp", "hp", "sh", "sc", "dt"].forEach((k) => {
-      const rule = c[k], o = obs[k];
-      if (rule === "any" || !o || o === "unknown") return;
-      considered++;
-      const w = wt[k] || 1;
-      if (rule === o) { score += w; matched++; } else { score -= w; }
-    });
-    return { name: c.name, text: c.text, key: c.key, score, matched, considered };
-  }).sort((a, b) => b.score - a.score || b.matched - a.matched);
-  return { set, ranked, knownCount };
+  const ev = collectEvidence(st);
+
+  const ranked = Object.values(KNOWLEDGE)
+    .filter((c) => c.metering.includes(set))
+    // Some conditions only exist when a defining symptom was observed
+    // (TXV hunting can't be seen in a single static snapshot).
+    .filter((c) => !c.requires || c.requires(ev))
+    .map((c) => {
+      let score = 0, matched = 0, considered = 0;
+      ["sp", "hp", "sh", "sc", "dt"].forEach((k) => {
+        const rule = c.pattern[k], o = obs[k];
+        if (rule === "any" || !o || o === "unknown") return;
+        considered++;
+        const w = wt[k] || 1;
+        if (cellMatches(rule, o)) { score += w; matched++; } else { score -= w; }
+      });
+
+      // Apply evidence: each hit adjusts the score and explains itself.
+      const reasons = [];
+      (c.evidence || []).forEach((rule) => {
+        let hit = false;
+        try { hit = !!rule.when(ev); } catch (err) { hit = false; }
+        if (hit) { score += rule.delta; reasons.push({ delta: rule.delta, why: rule.why }); }
+      });
+
+      // CONDEMN LAST. A bad metering device / TXV should be what's left after
+      // everything else is eliminated — not a first guess. Techs condemn these
+      // far too quickly, so they carry a penalty until charge is verified and
+      // an upstream restriction has been ruled out.
+      let condemnPenalty = 0;
+      if (c.condemnLast) {
+        const chargeOK = ev.chargeVerified === "Yes";
+        const restrictionOK = ev.restrictionRuledOut;
+        if (!chargeOK) condemnPenalty -= 2.5;
+        if (!restrictionOK) condemnPenalty -= 2;
+        if (condemnPenalty < 0) {
+          const need = [];
+          if (!chargeOK) need.push("verify the charge");
+          if (!restrictionOK) need.push("rule out a liquid line restriction");
+          reasons.push({ delta: condemnPenalty, why: `Held back until you ${need.join(" and ")} — don't condemn a metering device first` });
+        }
+        score += condemnPenalty;
+      }
+
+      return { id: c, name: c.name, text: c.text, key: c.key, warning: c.warning,
+               danger: c.danger, mistakenFor: c.mistakenFor,
+               tier: c.tier || 3, firstStep: c.firstStep, condemnLast: !!c.condemnLast,
+               score, matched, considered, reasons };
+    })
+    .sort((a, b) => b.score - a.score || b.matched - a.matched);
+
+  return { set, ranked, knownCount, ev };
 }
 
 // Render the reading-status panel; returns the statuses for reuse.
@@ -621,49 +700,128 @@ function renderConclusion(st) {
   const el = document.getElementById("conclusionPanel");
   const m = matchConditions(st);
 
+  // ---- Safety alarms come before any diagnosis. -------------------
+  let alarms = "";
+  if (st.hpAlarm) {
+    alarms += `<div class="banner banner-danger">High-side pressure is at or near the compressor's high-pressure cutout` +
+      (st.liquidPressure ? ` (${round1(st.liquidPressure)} psig` + (st.condTemp ? `, ${round1(st.condTemp)}\u00B0F condensing` : "") + `)` : "") +
+      `. Stop running the system. Find the cause before the compressor trips or is damaged.</div>`;
+  }
+  if (st.negCTOA) {
+    alarms += `<div class="banner banner-danger">Condensing temperature (${round1(st.condTemp)}\u00B0F) is at or below outdoor ambient (${round1(st.ambient)}\u00B0F). An air-cooled condenser cannot reject heat that way \u2014 it isn't condensing. Expect a severe undercharge, or verify your gauges and probe placement before adding refrigerant.</div>`;
+  }
+
   if (m.need === "metering") {
-    el.innerHTML = `<div class="conclusion"><p class="conclusion-text">Pick a <strong>metering device</strong> in Job Information (TXV, fixed orifice, or EEV) to match a condition.</p></div>`;
+    el.innerHTML = alarms + `<div class="conclusion"><p class="conclusion-text">Pick a <strong>metering device</strong> in Job Information (TXV, fixed orifice, or EEV) to match a condition.</p></div>`;
     return;
   }
   if (m.need === "data") {
-    el.innerHTML = `<div class="conclusion"><p class="conclusion-text">Enter a few more readings to get a suspected condition — aim for suction &amp; liquid pressures plus line temps (at least 3 of the five readings above).</p></div>`;
+    el.innerHTML = alarms + `<div class="conclusion"><p class="conclusion-text">Enter a few more readings to get a suspected condition \u2014 aim for suction &amp; liquid pressures plus line temps (at least 3 of the five readings above).</p></div>`;
     return;
   }
+
+  const ev = m.ev;
   const top = m.ranked[0];
   if (!top || top.score <= 0) {
-    el.innerHTML = `<div class="conclusion"><p class="conclusion-text">These readings don't clearly match one pattern yet. Re-verify your gauge connection and line-temp clamp placement, then recheck.</p></div>`;
+    el.innerHTML = alarms + `<div class="conclusion"><p class="conclusion-text">These readings don't clearly match one pattern yet. Re-verify your gauge connection and line-temp clamp placement, let the system stabilize 10\u201315 minutes, then recheck.</p></div>`;
     return;
   }
-  const alt = m.ranked[1];
-  const showAlt = alt && alt.score > 0 && (top.score - alt.score) < 2;
 
-  // Which of the five readings the app could NOT see. Naming these matters:
-  // head + subcool are what separate a restriction from a low charge.
+  // ---- AIRFLOW GATE ----------------------------------------------
+  // We always check airflow before refrigerant. If the air side isn't
+  // verified, no charge/metering call is trustworthy, so we don't lead
+  // with one. The candidates are shown, but demoted and labelled.
+  if (!ev.airflowVerified) {
+    const missing = [];
+    if (valOf("blowerRunning") !== "Yes") missing.push("blower operation");
+    if (!["Clean", "Replaced on site"].includes(valOf("filterCondition"))) missing.push("filter condition");
+    if (!["Clean", "Not accessible"].includes(valOf("evapCoil"))) missing.push("evaporator coil condition");
+
+    let h = alarms;
+    h += `<div class="conclusion tone-alert">`;
+    h += `<p class="conclusion-suspect">Verify airflow first</p>`;
+    h += `<p class="conclusion-text conclusion-airflow">Airflow hasn't been verified` +
+         (missing.length ? ` (${missing.join(", ")})` : "") +
+         `. Airflow problems mimic charge problems on every gauge you own. Correct the air side, let the system run, then re-read.</p>`;
+    h += `<p class="conclusion-key"><strong>Do this first:</strong> confirm the filter, evaporator coil, and blower. Then re-measure pressures and line temps.</p>`;
+    h += `<p class="conclusion-missing"><strong>Provisional only \u2014 not yet trustworthy:</strong> these readings currently look most like <strong>${top.name}</strong>. Do not act on that until airflow is verified.</p>`;
+    h += `<p class="conclusion-caveat">A direction to confirm, not a final call.</p></div>`;
+    el.innerHTML = h;
+    return;
+  }
+
+  // ---- DIFFERENTIAL ----------------------------------------------
+  // Some conditions genuinely cannot be separated from readings alone
+  // (a dirty condenser and an overcharge both raise head pressure).
+  // When they're close, present BOTH and order the work by tier, since
+  // an upstream fault corrupts every downstream reading.
+  const alt = m.ranked[1];
+  const differential = alt && alt.score > 0 && (top.score - alt.score) <= 3;
+
+  let html = alarms + `<div class="conclusion">`;
+
+  if (differential) {
+    // Lower tier gets verified first — that's the physical dependency order.
+    const first = top.tier <= alt.tier ? top : alt;
+    const second = first === top ? alt : top;
+
+    html += `<p class="conclusion-suspect">Suspected ${first.name.toLowerCase()} and/or ${second.name.toLowerCase()}</p>`;
+    html += `<p class="conclusion-score">These readings fit both \u00B7 ${st.metering}</p>`;
+    if (top.danger || alt.danger) html += `<p class="conclusion-danger">${top.danger || alt.danger}</p>`;
+    html += `<p class="conclusion-text">These two can't be separated from the gauges alone. Work them in order \u2014 the first will change the readings for the second.</p>`;
+    html += `<div class="steps">`;
+    html += `<div class="step-row"><span class="step-num">1</span><div><strong>${first.name}</strong><p>${first.firstStep || first.text}</p></div></div>`;
+    html += `<div class="step-row"><span class="step-num">2</span><div><strong>Then re-read</strong><p>If the readings don't correct after step 1, treat as ${second.name.toLowerCase()}. ${second.firstStep || second.text}</p></div></div>`;
+    html += `</div>`;
+  } else {
+    html += `<p class="conclusion-suspect">${top.name}</p>`;
+    html += `<p class="conclusion-score">matched ${top.matched} of ${top.considered} readings entered (5 total) \u00B7 ${st.metering}</p>`;
+    if (top.danger) html += `<p class="conclusion-danger">${top.danger}</p>`;
+    html += `<p class="conclusion-text">${top.text}</p>`;
+    if (top.firstStep) html += `<p class="conclusion-key"><strong>Do this first:</strong> ${top.firstStep}</p>`;
+  }
+
+  if (top.key) html += `<p class="conclusion-key"><strong>What points here:</strong> ${top.key}</p>`;
+
+  // On a TXV the valve holds superheat, so a normal superheat says little.
+  if (st.txvLike && st.sh.status === "normal") {
+    html += `<p class="conclusion-note">Superheat reads normal, but on a TXV the valve holds superheat \u2014 that tells you little about charge. Judge charge by <strong>subcooling</strong>.</p>`;
+  }
+
+  // Evidence that moved this diagnosis, so the tech sees the reasoning.
+  if (top.reasons && top.reasons.length) {
+    const pos = top.reasons.filter((r) => r.delta > 0);
+    const neg = top.reasons.filter((r) => r.delta < 0);
+    if (pos.length) html += `<div class="evidence-block"><p class="evidence-head">Supporting evidence</p><ul>` + pos.map((r) => `<li>${r.why}</li>`).join("") + `</ul></div>`;
+    if (neg.length) html += `<div class="evidence-block evidence-against"><p class="evidence-head">Evidence against</p><ul>` + neg.map((r) => `<li>${r.why}</li>`).join("") + `</ul></div>`;
+  }
+
+  // Which of the five pillars the app could NOT see.
   const unseen = [
-    ["Head pressure", st.head.status],
-    ["Subcooling", st.sc.status],
-    ["Superheat", st.sh.status],
-    ["Suction pressure", st.suction.status],
-    ["Temperature split", st.dt.status]
+    ["Head pressure", st.head.status], ["Subcooling", st.sc.status], ["Superheat", st.sh.status],
+    ["Suction pressure", st.suction.status], ["Temperature split", st.dt.status]
   ].filter(([, s]) => !s || s === "unknown").map(([n]) => n);
 
-  const airflowBad = valOf("blowerRunning") === "No" ||
-    ["Dirty", "Very dirty / restricted"].includes(valOf("filterCondition")) ||
-    ["Dirty", "Frozen / iced"].includes(valOf("evapCoil"));
+  const uncollected = [];
+  if (ev.drierDrop === "Not checked") uncollected.push("temp drop across the filter drier");
+  if (ev.frostLoc === "Not checked") uncollected.push("frost/sweating location");
+  if (ev.ampStatus === "unknown") uncollected.push("amp draw vs nameplate RLA");
 
-  let html = `<div class="conclusion ${airflowBad ? "tone-alert" : ""}">`;
-  if (airflowBad) {
-    html += `<p class="conclusion-text conclusion-airflow">Airflow looks compromised — correct filter, coil, and blower first. Airflow problems mimic charge problems on this chart, so trust the charge readings only after airflow is right.</p>`;
-  }
-  html += `<p class="conclusion-suspect">${top.name}</p>`;
-  html += `<p class="conclusion-score">matched ${top.matched} of ${top.considered} readings entered (5 total) · ${st.metering}</p>`;
-  html += `<p class="conclusion-text">${top.text}</p>`;
-  if (top.key) html += `<p class="conclusion-key"><strong>What points here:</strong> ${top.key}</p>`;
-  if (showAlt) html += `<p class="conclusion-alt">Could also be <strong>${alt.name}</strong> — ${alt.text}</p>`;
   if (unseen.length) {
-    html += `<p class="conclusion-missing"><strong>Partial match — ${unseen.length} reading${unseen.length > 1 ? "s" : ""} missing:</strong> ${unseen.join(", ")}. Several conditions look alike without these. Enter them before acting on this.</p>`;
+    html += `<p class="conclusion-missing"><strong>Partial match \u2014 ${unseen.length} reading${unseen.length > 1 ? "s" : ""} missing:</strong> ${unseen.join(", ")}. Several conditions look alike without these.</p>`;
   }
-  html += `<p class="conclusion-caveat">A direction to confirm, not a final call. Check the reading status above, verify against the data-plate targets, and recheck after any correction.</p>`;
+  if (uncollected.length) {
+    html += `<p class="conclusion-missing"><strong>Would sharpen this call:</strong> ${uncollected.join(", ")}.</p>`;
+  }
+
+  if (top.warning) html += `<p class="conclusion-warning">${top.warning}</p>`;
+
+  if (top.mistakenFor && top.mistakenFor.length) {
+    html += `<details class="causes"><summary>Commonly mistaken for this</summary><ul>` +
+      top.mistakenFor.map((c) => `<li>${c}</li>`).join("") + `</ul></details>`;
+  }
+
+  html += `<p class="conclusion-caveat">A direction to confirm, not a final call. A lot of faults present as each other \u2014 especially TXVs. Verify against the data-plate targets, let the system stabilize, and recheck after any correction.</p>`;
   html += `</div>`;
   el.innerHTML = html;
 }
@@ -693,6 +851,76 @@ const CAUSES = {
     low: ["Undercharge", "Severe overcharge on a fixed orifice", "Metering device restricting or overfeeding", "Too much airflow through the evaporator", "Heat strips running with the air", "Abnormally high humidity", "Liquid line restriction", "Compressor not pumping properly", "Reversing valve bypassing", "Discharge line restriction"]
   }
 };
+
+// Compressor amp draw compared to nameplate RLA (readout on the electrical step).
+function renderAmpReadout() {
+  const chip = document.getElementById("ampChip");
+  const range = document.getElementById("ampRange");
+  if (!chip || !range) return;
+  const a = numOf("compAmps"), rla = numOf("compRLA");
+  if (isNaN(a) || isNaN(rla) || rla <= 0) {
+    chip.textContent = "—"; chip.className = "readout-chip";
+    range.textContent = "Enter amp draw and nameplate RLA.";
+    return;
+  }
+  const pct = (a / rla) * 100;
+  const s = ampStatusOf();
+  chip.textContent = s === "low" ? "LOW" : s === "high" ? "HIGH" : "NORMAL";
+  chip.className = "readout-chip " + (s === "normal" ? "is-pass" : "is-warn");
+  const note = s === "low" ? "well under RLA — fits a starved system moving less refrigerant"
+             : s === "high" ? "at or over RLA — fits high head / high compression ratio"
+             : "within the expected range";
+  range.textContent = `${round1(a)}A of ${round1(rla)}A RLA (${Math.round(pct)}%) · ${note}`;
+}
+
+// Fixed-orifice target superheat, read off the charging chart.
+function renderPistonReadout() {
+  const chip = document.getElementById("pistonChip");
+  const text = document.getElementById("pistonText");
+  if (!chip || !text) return;
+
+  const metering = valOf("meteringDevice");
+  if (metering !== "Fixed orifice / piston") {
+    chip.textContent = "N/A";
+    chip.className = "readout-chip";
+    text.textContent = metering
+      ? `Not used on ${metering} systems — the valve holds superheat, so charge by subcooling.`
+      : "For fixed-orifice systems: enter return air wet bulb and outdoor temp.";
+    return;
+  }
+
+  const wb = numOf("returnWB"), odb = numOf("outdoorTemp");
+  const res = pistonTargetSuperheat(wb, odb);
+
+  if (res.error === "input") {
+    chip.textContent = "—"; chip.className = "readout-chip";
+    text.textContent = isNaN(wb)
+      ? "Enter return air wet bulb (Indoor Airflow step) to get a target."
+      : "Enter outdoor temp (Thermostat step) to get a target.";
+    return;
+  }
+  if (res.error === "range") {
+    chip.textContent = "OFF CHART"; chip.className = "readout-chip is-warn";
+    text.textContent = `WB ${round1(wb)}°F / ODB ${round1(odb)}°F falls outside the chart (WB 50–76, ODB 55–115). Use the manufacturer's chart.`;
+    return;
+  }
+  if (res.error === "nocharge") {
+    chip.textContent = "DO NOT CHARGE"; chip.className = "readout-chip is-fail";
+    text.textContent = `At WB ${round1(wb)}°F / ODB ${round1(odb)}°F the chart has no target (red zone). Target superheat is too low to charge safely by superheat under these conditions. Weigh in the charge or return when conditions allow.`;
+    return;
+  }
+
+  const t = res.target;
+  const actual = numOf("suctionLine") - numOf("suctionSat");
+  chip.textContent = `TARGET ${t}°F`;
+  chip.className = "readout-chip is-pass";
+  let msg = `WB ${round1(wb)}°F / ODB ${round1(odb)}°F → target superheat ${t}°F (±5°F acceptable).`;
+  if (!isNaN(actual)) {
+    const diff = actual - t;
+    msg += ` Actual ${round1(actual)}°F — ${Math.abs(diff) <= 5 ? "within range" : diff > 0 ? `${round1(diff)}°F HIGH (starved / low charge?)` : `${round1(-diff)}°F LOW (overfed / overcharge?)`}.`;
+  }
+  text.textContent = msg;
+}
 
 /* ---- 6. Diagnostic guidance ------------------------------------ */
 // Reads current entries + calculated values and returns a list of
@@ -761,10 +989,19 @@ function computeGuidance() {
     }
   }
 
-  // Rule 8 — fixed orifice: superheat needs a real chart, not a rule of thumb.
-  if (st7.metering === "Fixed orifice / piston" && !isNaN(superheat)) {
-    add("info", "Piston superheat needs a chart",
-      "Target superheat on a fixed orifice depends on indoor wet bulb and outdoor dry bulb. Use the manufacturer's superheat chart with a psychrometer — a fixed number will mislead you.");
+  // Rule 8 — fixed orifice: the chart needs a wet bulb, and has a red zone.
+  if (st7.isFixed) {
+    const pt = st7.pistonTarget;
+    if (pt && pt.error === "input" && isNaN(numOf("returnWB"))) {
+      add("info", "Wet bulb needed for a piston superheat target",
+        "Target superheat on a fixed orifice depends on return-air wet bulb and outdoor dry bulb. Take a wet bulb reading with a psychrometer — a fixed number will mislead you.");
+    } else if (pt && pt.error === "nocharge") {
+      add("alert", "Do not charge by superheat in these conditions",
+        "The charging chart has no target for this wet bulb and outdoor temperature. Superheat charging isn't reliable here. Weigh in the charge to the nameplate, or return when indoor and outdoor conditions allow a valid reading.");
+    } else if (pt && pt.error === "range") {
+      add("caution", "Conditions are off the charging chart",
+        "This wet bulb / outdoor temp combination falls outside the generic chart. Use the manufacturer's charging chart for this equipment.");
+    }
   }
 
   // Standing reminder when refrigerant data is present.
@@ -843,6 +1080,7 @@ function buildSummary() {
     row(["Filter", g("filterCondition")], ["Blower", g("blowerRunning")], ["Speed/tap checked", g("blowerSpeed")], ["Evap coil", g("evapCoil")]),
     row(["Return restrictions", g("returnRestrict")], ["Supply restrictions", g("supplyRestrict")]),
     row(["Return °F", g("returnTemp")], ["Supply °F", g("supplyTemp")],
+        ["Return WB °F", g("returnWB")],
         ["Temp split °F", split !== null ? round1(split) : ""]),
     g("staticPressure") ? `Static pressure: ${g("staticPressure")}` : "",
     g("airflowNotes") ? `Notes: ${g("airflowNotes")}` : "",
@@ -852,7 +1090,7 @@ function buildSummary() {
   section("OUTDOOR ELECTRICAL", [
     row(["Unit running", g("outdoorRunning")], ["Disconnect", g("disconnectOn")], ["Breaker", g("breakerOn")], ["Contactor", g("contactorPulled")]),
     row(["Line voltage", g("lineVoltage")], ["24V signal", g("lowVoltage")], ["Cap tested", g("capTested")], ["Cond fan", g("condFanRunning")], ["Compressor", g("compRunning")]),
-    row(["Compressor amps", g("compAmps") ? g("compAmps") + "A" : ""], ["Condenser coil", g("condCoil")]),
+    row(["Compressor amps", g("compAmps") ? g("compAmps") + "A" : ""], ["Nameplate RLA", g("compRLA") ? g("compRLA") + "A" : ""], ["Condenser coil", g("condCoil")]),
     g("electricalNotes") ? `Notes: ${g("electricalNotes")}` : "",
   ]);
 
@@ -870,9 +1108,20 @@ function buildSummary() {
     row(["Suction psig", g("suctionPressure")], ["Suction sat °F", g("suctionSat")], ["Suction line °F", g("suctionLine")]),
     row(["Liquid psig", g("liquidPressure")], ["Liquid sat °F", g("liquidSat")], ["Liquid line °F", g("liquidLine")]),
     row(["Superheat °F", superheat !== null ? round1(superheat) : ""], ["Subcooling °F", subcool !== null ? round1(subcool) : ""]),
+    row([">3°F drop across drier", g("drierDrop")], ["Frost location", g("frostLoc")]),
+    row(["Superheat swinging", g("shSwinging")], ["Bulb issue found", g("bulbIssue")], ["Recently opened/evacuated", g("recentService")], ["Charge verified", g("chargeVerified")]),
     g("refrigNotes") ? `Notes: ${g("refrigNotes")}` : "",
   ].filter(Boolean);
   if (refrigLines.length) {
+    // Record the fixed-orifice chart target when one applies.
+    if (valOf("meteringDevice") === "Fixed orifice / piston") {
+      const pr = pistonTargetSuperheat(numOf("returnWB"), numOf("outdoorTemp"));
+      if (pr.target != null) {
+        refrigLines.push(`Piston chart target superheat: ${pr.target}°F (WB ${g("returnWB")} / ODB ${g("outdoorTemp")}), ±5°F acceptable.`);
+      } else if (pr.error === "nocharge") {
+        refrigLines.push("Piston chart: conditions fall in the do-not-charge zone; superheat charging not valid at this wet bulb / outdoor temp.");
+      }
+    }
     // Flag when saturation temps were derived from the PT chart (not manual).
     const satAuto = (valOf("suctionSatMode") !== "manual" && valOf("suctionSat") !== "") ||
                     (valOf("liquidSatMode") !== "manual" && valOf("liquidSat") !== "");
@@ -947,6 +1196,8 @@ function onChange() {
   calcCapacitors();
   ptComputeAndDisplay(); // writes derived saturation temps BEFORE superheat/subcool
   calcRefrigerant();
+  renderPistonReadout();
+  renderAmpReadout();
   const st = renderReadingStatus(); // High/Low/Normal per reading
   renderConclusion(st);             // best-match condition from the chart
   renderGuidance();

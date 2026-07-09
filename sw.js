@@ -11,13 +11,15 @@
   (Bumping it is still good hygiene when you change files.)
 */
 
-const CACHE_VERSION = "bdc-v10";
+const CACHE_VERSION = "bdc-v13";
 
 const APP_FILES = [
   "./",
   "./index.html",
   "./styles.css",
   "./pt-data.js",
+  "./piston-chart.js",
+  "./knowledge.js",
   "./app.js",
   "./manifest.webmanifest",
   "./icon-192.png",

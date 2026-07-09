@@ -27,7 +27,7 @@
     <img class="brand-logo" src="icon-192.png" alt="Bell Bros." />
     <div class="brand-text">
       <strong>Bell Diagnostic Coach</strong>
-      <span>Residential no-cool · v10</span>
+      <span>Residential no-cool · v13</span>
     </div>
   </div>
   <div class="header-actions">
@@ -190,6 +190,10 @@
           <input type="number" data-field="supplyTemp" inputmode="decimal" placeholder="57" />
         </label>
       </div>
+      <label class="field">Return air WET BULB (°F)
+        <input type="number" data-field="returnWB" inputmode="decimal" placeholder="63" />
+        <small class="hint">Needs a psychrometer. Required for a fixed-orifice superheat target.</small>
+      </label>
 
       <!-- Live calculated readout: temperature split -->
       <div class="readout" id="splitReadout">
@@ -223,9 +227,21 @@
       <div class="check" data-choice="condFanRunning" data-label="Condenser fan motor running?"></div>
       <div class="check" data-choice="compRunning" data-label="Compressor running?"></div>
 
-      <label class="field">Compressor amp draw (A)
-        <input type="number" data-field="compAmps" inputmode="decimal" placeholder="e.g. 14.5" />
-      </label>
+      <div class="field-row">
+        <label class="field">Compressor amp draw (A)
+          <input type="number" data-field="compAmps" inputmode="decimal" placeholder="e.g. 14.5" />
+        </label>
+        <label class="field">Nameplate RLA (A)
+          <input type="number" data-field="compRLA" inputmode="decimal" placeholder="e.g. 17.0" />
+        </label>
+      </div>
+      <div class="readout" id="ampReadout">
+        <div class="readout-row">
+          <span class="readout-label">Amp draw vs RLA</span>
+          <span class="readout-chip" id="ampChip">—</span>
+        </div>
+        <p class="readout-range" id="ampRange">Enter amp draw and nameplate RLA.</p>
+      </div>
       <label class="field">Condenser coil condition
         <select data-field="condCoil">
           <option value="">Select…</option>
@@ -367,6 +383,37 @@
         </div>
       </div>
 
+      <!-- Fixed-orifice target superheat, looked up from the charging chart -->
+      <div class="readout" id="pistonReadout">
+        <div class="readout-row">
+          <span class="readout-label">Target superheat (piston)</span>
+          <span class="readout-chip" id="pistonChip">—</span>
+        </div>
+        <p class="readout-range" id="pistonText">For fixed-orifice systems: enter return air wet bulb and outdoor temp.</p>
+      </div>
+
+      <!-- Evidence that separates look-alike conditions. Undercharge,
+           liquid line restriction, clogged piston, and TXV underfeeding all
+           show low suction + high superheat. These fields tell them apart. -->
+      <fieldset class="subgroup">
+        <legend>Restriction &amp; stability checks</legend>
+        <div class="check" data-choice="drierDrop" data-label="More than 3°F temp drop across the filter drier?"></div>
+        <label class="field">Frost or sweating location
+          <select data-field="frostLoc">
+            <option value="">Not checked</option>
+            <option>None</option>
+            <option>Filter drier</option>
+            <option>Liquid line / kink</option>
+            <option>Metering device</option>
+            <option>Suction line / evap coil</option>
+          </select>
+        </label>
+        <div class="check" data-choice="shSwinging" data-label="Superheat swinging / not settling?"></div>
+        <div class="check" data-choice="bulbIssue" data-label="TXV bulb loose, warm, or uninsulated?"></div>
+        <div class="check" data-choice="recentService" data-label="System recently opened, evacuated, or recharged?"></div>
+        <div class="check" data-choice="chargeVerified" data-label="Charge verified correct (weighed in / data-plate subcool)?"></div>
+      </fieldset>
+
       <label class="field">Notes
         <textarea data-field="refrigNotes" rows="2" placeholder="Metering device, TXV bulb, restrictions, etc."></textarea>
       </label>
@@ -439,6 +486,8 @@
 </nav>
 
 <script src="pt-data.js"></script>
+<script src="piston-chart.js"></script>
+<script src="knowledge.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

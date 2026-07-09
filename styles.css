@@ -268,6 +268,47 @@ input.is-auto { background: #f2fbfd; border-color: #bfe6ec; }
   padding-top: 10px; border-top: 1px dashed var(--line); }
 .conclusion-key { font-size: 13px; color: var(--steel); background: #eef4f8;
   border-radius: 8px; padding: 9px 12px; margin: 10px 0 0; }
+
+/* Evidence for / against the suspected condition */
+.evidence-block { margin: 10px 0 0; }
+.evidence-head { font-size: 12px; font-weight: 700; letter-spacing: 0.4px;
+  text-transform: uppercase; color: var(--pass); margin: 0 0 4px; }
+.evidence-block ul { margin: 0; padding-left: 20px; }
+.evidence-block li { font-size: 13px; color: #35485a; margin-bottom: 4px; line-height: 1.4; }
+.evidence-against .evidence-head { color: var(--fail); }
+
+/* Ordered work steps in a differential conclusion */
+.steps { margin: 12px 0 0; display: flex; flex-direction: column; gap: 10px; }
+.step-row { display: flex; gap: 12px; align-items: flex-start; }
+.step-num {
+  flex: none; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--steel); color: #fff; font-weight: 700; font-size: 13px;
+  display: grid; place-items: center; margin-top: 2px;
+}
+.step-row strong { font-size: 14px; color: var(--steel); }
+.step-row p { font-size: 13px; color: #35485a; margin: 3px 0 0; line-height: 1.45; }
+
+/* "Superheat looks normal but it's a TXV" note */
+.conclusion-note {
+  font-size: 13px; color: #97650f; background: #fdf7ec;
+  border: 1px solid #f0dcb4; border-radius: 8px;
+  padding: 10px 12px; margin: 10px 0 0;
+}
+
+/* Immediate-risk callout (e.g. floodback) */
+.conclusion-danger {
+  font-size: 13px; font-weight: 700; color: var(--fail);
+  background: #fdeae7; border: 1px solid #f4c3ba;
+  border-radius: 8px; padding: 10px 12px; margin: 0 0 10px;
+}
+
+/* Full verify-before-condemning warning */
+.conclusion-warning {
+  font-size: 13px; color: #35485a; background: #fbfcfd;
+  border: 1px solid var(--line); border-left: 3px solid var(--steel-2);
+  border-radius: 8px; padding: 10px 12px; margin: 12px 0 0;
+}
+
 .conclusion-missing {
   font-size: 13px; color: #97650f; background: #fdf7ec;
   border: 1px solid #f0dcb4; border-radius: 8px;
