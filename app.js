@@ -59,33 +59,7 @@ document.addEventListener("click", (e) => {
   onChange();
 });
 
-/* ---- 2. Build the photo checklist ------------------------------ */
-const PHOTOS = [
-  ["photo_dataplate", "Equipment data plate"],
-  ["photo_tstat", "Thermostat"],
-  ["photo_filter", "Filter"],
-  ["photo_evap", "Evaporator coil (if accessible)"],
-  ["photo_cond", "Condenser coil"],
-  ["photo_electrical", "Electrical readings"],
-  ["photo_cap", "Capacitor reading (if applicable)"],
-  ["photo_failed", "Failed part (if applicable)"],
-  ["photo_refrig", "Refrigerant readings"],
-  ["photo_final", "Final operating condition"],
-];
-$("#photoList").innerHTML = PHOTOS.map(
-  ([key, text]) => `
-  <label class="photo-item">
-    <input type="checkbox" data-field="${key}" />
-    <span>${text}</span>
-  </label>`
-).join("");
-// Tint a photo row green once its box is checked.
-$("#photoList").addEventListener("change", (e) => {
-  const item = e.target.closest(".photo-item");
-  if (item) item.classList.toggle("is-checked", e.target.checked);
-});
-
-/* ---- 3. Save / restore progress (localStorage) ----------------- */
+/* ---- 2. Save / restore progress (localStorage) ----------------- */
 // Collect every field into a plain object.
 function collectState() {
   const state = {};
@@ -123,9 +97,6 @@ function restoreState() {
       b.classList.toggle("is-active", b.dataset.val === v && v !== "")
     );
   });
-  $$(".photo-item").forEach((item) =>
-    item.classList.toggle("is-checked", $("input", item).checked)
-  );
 }
 
 /* ---- 4. Step navigation ---------------------------------------- */
@@ -214,11 +185,15 @@ function calcCap(ratedKey, actualKey, tol, rangeEl, chipEl) {
   }
   const min = rated * (1 - tol / 100);
   const max = rated * (1 + tol / 100);
+  // Tolerance is +/- : a cap can fail by reading HIGH just as it can by reading LOW.
   const within = actual >= min && actual <= max;
+  const over = actual > max;
   rangeEl.textContent = `Range ${round1(min)} – ${round1(max)} MFD  (actual ${round1(actual)})`;
-  chipEl.textContent = within ? "In tolerance" : "Out of tolerance";
+  chipEl.textContent = within
+    ? "In tolerance"
+    : over ? "Out of spec — HIGH" : "Out of spec — LOW";
   chipEl.className = "readout-chip " + (within ? "is-pass" : "is-fail");
-  return { min, max, actual, within };
+  return { min, max, actual, within, over };
 }
 
 function calcCapacitors() {
@@ -605,11 +580,14 @@ function computeGuidance() {
       "A dirty filter or coil can cause low suction, freezing, a poor temperature split, and misleading refrigerant readings. Correct airflow first, then re-check.");
   }
 
-  // Rule 3 — capacitor out of tolerance (either side).
+  // Rule 3 — capacitor out of spec on either side, high OR low (+/- tolerance).
   const capOut = (caps.herm && !caps.herm.within) || (caps.fan && !caps.fan.within);
   if (capOut) {
-    add("alert", "Capacitor out of tolerance",
-      "Confirm proper voltage to the unit, then replace the capacitor before continuing your diagnosis. A weak cap can mimic other failures.");
+    const highSide = (caps.herm && caps.herm.over) || (caps.fan && caps.fan.over);
+    add("alert", "Capacitor out of spec",
+      highSide
+        ? "A cap reading above its rated MFD is out of spec just like a weak one. Confirm proper voltage to the unit, verify your meter and that the cap is fully discharged, then replace the capacitor before continuing."
+        : "Confirm proper voltage to the unit, then replace the capacitor before continuing your diagnosis. A weak cap can mimic other failures.");
   }
 
   // Rule 4 — amp draw but compressor not confirmed pumping.
@@ -723,8 +701,9 @@ function buildSummary() {
   // Capacitor ------------------------------------------------------
   const { herm, fan } = calcCapacitors();
   const capLines = [];
-  if (herm) capLines.push(`HERM (compressor): rated ${g("hermRated")} / actual ${g("hermActual")} MFD — ${herm.within ? "in tolerance" : "OUT of tolerance"} (range ${round1(herm.min)}–${round1(herm.max)})`);
-  if (fan) capLines.push(`FAN: rated ${g("fanRated")} / actual ${g("fanActual")} MFD — ${fan.within ? "in tolerance" : "OUT of tolerance"} (range ${round1(fan.min)}–${round1(fan.max)})`);
+  const capState = (c) => c.within ? "in tolerance" : (c.over ? "OUT of spec (reads high)" : "OUT of spec (reads low)");
+  if (herm) capLines.push(`HERM (compressor): rated ${g("hermRated")} / actual ${g("hermActual")} MFD — ${capState(herm)} (range ${round1(herm.min)}–${round1(herm.max)})`);
+  if (fan) capLines.push(`FAN: rated ${g("fanRated")} / actual ${g("fanActual")} MFD — ${capState(fan)} (range ${round1(fan.min)}–${round1(fan.max)})`);
   section("CAPACITOR", capLines);
 
   // Refrigerant ----------------------------------------------------
@@ -795,7 +774,6 @@ $("#btnClear").addEventListener("click", () => {
     else el.value = "";
   });
   $$(".seg-btn").forEach((b) => b.classList.remove("is-active"));
-  $$(".photo-item").forEach((i) => i.classList.remove("is-checked"));
   // reset the tolerance default
   if (field("capTolerance")) field("capTolerance").value = "6";
   syncSatModeUI("suction");   // back to derived-display mode
@@ -834,10 +812,22 @@ onChange();                   // compute everything once
 showStep(0);                  // open on the first step
 
 // Register the service worker so the app works offline in the field.
+// It's network-first, so fresh files always win when there's signal.
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(() => {
-      /* offline support just won't be available; the app still runs */
-    });
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" })
+      .then((reg) => {
+        reg.update(); // check for a newer version on every load
+        // When a new service worker takes over, reload once to get fresh files.
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (refreshing) return;
+          refreshing = true;
+          window.location.reload();
+        });
+      })
+      .catch(() => {
+        /* offline support just won't be available; the app still runs */
+      });
   });
 }

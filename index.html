@@ -27,7 +27,7 @@
     <img class="brand-logo" src="icon-192.png" alt="Bell Bros." />
     <div class="brand-text">
       <strong>Bell Diagnostic Coach</strong>
-      <span>Residential no-cool</span>
+      <span>Residential no-cool · v7</span>
     </div>
   </div>
   <div class="header-actions">
@@ -237,8 +237,9 @@
       <h2 class="card-title">Capacitor tolerance calculator</h2>
       <p class="card-sub">Compare measured microfarads against the rated value and tolerance.</p>
 
-      <label class="field">Tolerance (%)
+      <label class="field">Tolerance (± %)
         <input type="number" data-field="capTolerance" inputmode="decimal" value="6" />
+        <small class="hint">A cap is out of spec if it reads above OR below this range.</small>
       </label>
 
       <fieldset class="subgroup">
@@ -366,7 +367,7 @@
   <section class="step" data-title="Diagnostic Guidance">
     <div class="card">
       <h2 class="card-title">Reading status</h2>
-      <p class="card-sub">How each reading compares to what's expected for the outdoor temp and system. Estimates — verify against the data plate.</p>
+      <p class="card-sub">How each reading compares to what is expected for the outdoor temp and system. These are approximations — verify against the data plate.</p>
       <div id="statusPanel" class="status-panel"><!-- filled in by app.js --></div>
     </div>
 
@@ -383,16 +384,7 @@
     </div>
   </section>
 
-  <!-- 8. REQUIRED PHOTO CHECKLIST ------------------------------- -->
-  <section class="step" data-title="Photo Checklist">
-    <div class="card">
-      <h2 class="card-title">Required photos</h2>
-      <p class="card-sub">Check each photo as you take it. Photos protect the diagnosis and the estimate.</p>
-      <div id="photoList" class="photo-list"><!-- filled in by app.js --></div>
-    </div>
-  </section>
-
-  <!-- 9. FINAL SERVICETITAN SUMMARY ----------------------------- -->
+  <!-- 8. FINAL SERVICETITAN SUMMARY ----------------------------- -->
   <section class="step" data-title="ServiceTitan Summary">
     <div class="card">
       <h2 class="card-title">Findings &amp; status</h2>
